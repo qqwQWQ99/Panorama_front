@@ -27,6 +27,7 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import { singleClick } from 'ol/events/condition';
 import { Point } from "ol/geom";
+import { getPhotoDataList } from '@/api/map/map.js'
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -34,6 +35,11 @@ const showImage = ref(false);
 let map: Map;
 // 全景视图
 let panoramaViewer = null;
+
+async function getPhotoData() {
+  const photoData = await getPhotoDataList()
+  return photoData
+}
 
 const tks = ['2b3024a8d9d2ad627fb1cdf6c9848e4b', '99deae501a50e17131f690f0f5b325eb', '394f33decf86eb6e084d5f4f85fe7d6c', 'f3aee4e9368106d2486b33b6cdf07822']
 const randomNum = Math.floor(Math.random() * 4)
@@ -55,113 +61,95 @@ const TiandiMap_cva = new Tile({
   preload: Infinity
 });
 
-const imgData = [
-  {
-    coordinates: [120.87820709, 22.29058715],
-    imageUrl: '/2021_05_00_22.29058715_120.87820709_19_276_CbSUk_bUoPPGvPBaBrjDTg.jpg',
-  },
-  {
-    coordinates: [120.87848180, 22.29062710],
-    imageUrl: '/2021_05_00_22.29062710_120.87848180_19_281_8nOU63bTcGTCjfjPQTP-BA.jpg',
-  },
-  {
-    coordinates: [120.87485099, 22.29347633],
-    imageUrl: '/2021_05_00_22.29347633_120.87485099_23_101_8DJibfJNWzdptcLuJMZo8w.jpg',
-  },
-  {
-    coordinates: [120.86731876, 22.29380041],
-    imageUrl: '/2021_05_00_22.29380041_120.86731876_36_106_DoV9ETctyedqvCBslk2uTQ.jpg',
-  },
-  {
-    coordinates: [120.88872026, 22.30041688],
-    imageUrl: '/2021_11_00_22.30041688_120.88872026_15_357_a42Zv2sBc-X_uREo2FYrqQ.jpg',
-  },
-]
-
 onMounted(() => {
-  map = new Map({
-    target: 'mapContainer', // 这里要确保ID与模板中的div一致
-    layers: [
-      TiandiMap_cva, TiandiMap_vec
-    ],
-    controls: defaults({
-      attributionOptions: {
-        collapsible: false
-      }
-    }),
-    view: new View({
-      center: transform([120.9820, 23.74], "EPSG:4326", "EPSG:3857"),//将坐标从经度,纬度转换为不同的投影,默认为'EPSG：3857'。//视觉中心
-      zoom: 8.5,
-    }),
-  });
+  nextTick(() => {
+    getPhotoData().then(res => {
+      map = new Map({
+        target: 'mapContainer', // 这里要确保ID与模板中的div一致
+        layers: [
+          TiandiMap_cva, TiandiMap_vec
+        ],
+        controls: defaults({
+          attributionOptions: {
+            collapsible: false
+          }
+        }),
+        view: new View({
+          center: transform([120.9820, 23.74], "EPSG:4326", "EPSG:3857"),//将坐标从经度,纬度转换为不同的投影,默认为'EPSG：3857'。//视觉中心
+          zoom: 8.5,
+        }),
+      });
 
-  const features = imgData.map((point) => {
-    const feature = new Feature({
-      geometry: new Point(fromLonLat(point.coordinates)),
-    });
-    feature.setStyle(
-        new Style({
-          image: new Icon({
-            anchor: [0.5, 1],
-            src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // 使用一个简单的图标
-            scale: 0.05,
-          }),
-        })
-    );
-    feature.setId(point.imageUrl);
-    return feature;
-  });
+      const features = res.map((point) => {
+        const coordinates = [Number(point.longitude), Number(point.latitude)]
+        const feature = new Feature({
+          geometry: new Point(fromLonLat(coordinates)),
+        });
+        feature.setStyle(
+            new Style({
+              image: new Icon({
+                anchor: [0.5, 1],
+                src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // 使用一个简单的图标
+                scale: 0.05,
+              }),
+            })
+        );
+        feature.setId(point.id);
+        return feature;
+      });
 
-  const vectorSource = new VectorSource({
-    features: features,
-  });
+      const vectorSource = new VectorSource({
+        features: features,
+      });
 
-  const vectorLayer = new VectorLayer({
-    source: vectorSource,
-  });
+      const vectorLayer = new VectorLayer({
+        source: vectorSource,
+      });
 
-  map.addLayer(vectorLayer);
+      map.addLayer(vectorLayer);
 
-  // 点击事件
-  map.on('click', (event) => {
-    showImage.value = true;
-    map.forEachFeatureAtPixel(event.pixel, (feature) => {
-      const imageUrl = feature.getId() as string;
-      console.log("imageUrl", imageUrl)
-      if (imageUrl) {
-        // 缩小地图并移到左上角
-        const mapEl = mapContainer.value;
-        if (mapEl) {
-          mapEl.style.width = '300px';
-          mapEl.style.height = '200px';
-          mapEl.style.position = 'absolute';
-          mapEl.style.top = '10px';
-          mapEl.style.left = '10px';
-          map.updateSize();
-        }
-        if (panoramaViewer) {
-          // 如果全景视图已经初始化，更新全景图像
-          panoramaViewer.setPanorama(imageUrl);
-        } else {
-          nextTick(() => {
-            // 否则初始化全景视图
-            panoramaViewer = new Viewer({
-              container: viewerContainer.value,
-              panorama: imageUrl,
-              navbar: [
-                'autorotate',
-                'zoom',
-                'move',
-                'caption',
-                'fullscreen',
-              ],
-            });
-          })
-        }
-      }
-    });
-  });
-
+      // 点击事件
+      map.on('click', (event) => {
+        showImage.value = true;
+        map.forEachFeatureAtPixel(event.pixel, (feature) => {
+          const imageUrl = feature.getId() as string;
+          console.log("imageUrl", imageUrl)
+          if (imageUrl) {
+            // 缩小地图并移到左上角
+            const mapEl = mapContainer.value;
+            if (mapEl) {
+              mapEl.style.width = '300px';
+              mapEl.style.height = '200px';
+              mapEl.style.position = 'absolute';
+              mapEl.style.top = '10px';
+              mapEl.style.left = '10px';
+              map.updateSize();
+            }
+            /*if (panoramaViewer) {
+              // 如果全景视图已经初始化，更新全景图像
+              panoramaViewer.setPanorama(imageUrl);
+            } else {
+              nextTick(() => {
+                // 否则初始化全景视图
+                panoramaViewer = new Viewer({
+                  container: viewerContainer.value,
+                  panorama: imageUrl,
+                  navbar: [
+                    'autorotate',
+                    'zoom',
+                    'move',
+                    'caption',
+                    'fullscreen',
+                  ],
+                });
+              })
+            }*/
+          }
+        });
+      });
+    })
+    //console.log("photoDataList", photoDataList.value)
+  })
 });
 
 // 方法：返回地图
