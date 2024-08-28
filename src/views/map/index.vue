@@ -28,6 +28,8 @@ import VectorSource from 'ol/source/Vector';
 import { singleClick } from 'ol/events/condition';
 import { Point } from "ol/geom";
 import { getPhotoDataList, getPano } from '@/api/map/map.js'
+import mapPng from '@/assets/icons/map.png'
+import map1Png from '@/assets/icons/map1.png'
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -94,7 +96,7 @@ onMounted(() => {
             new Style({
               image: new Icon({
                 anchor: [0.5, 1],
-                src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // 使用一个简单的图标
+                src: mapPng, // 使用一个简单的图标
                 scale: 0.05,
               }),
             })
@@ -116,7 +118,28 @@ onMounted(() => {
       // 点击事件
       map.on('click', (event) => {
         showImage.value = true;
+        // 首先重置所有 feature 的样式为 mapPng
+        vectorSource.getFeatures().forEach((feature) => {
+          feature.setStyle(
+              new Style({
+                image: new Icon({
+                  anchor: [0.5, 1],
+                  src: mapPng, // 重置为原始图标
+                  scale: 0.05,
+                }),
+              })
+          );
+        });
         map.forEachFeatureAtPixel(event.pixel, (feature) => {
+          feature.setStyle(
+              new Style({
+                image: new Icon({
+                  anchor: [0.5, 1],
+                  src: map1Png, // 使用一个简单的图标
+                  scale: 0.05,
+                }),
+              })
+          );
           const imageUrl = feature.getId() as string;
           if (imageUrl) {
             // 缩小地图并移到左上角
