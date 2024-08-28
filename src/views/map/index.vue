@@ -66,19 +66,6 @@ const TiandiMap_cva = new Tile({
   preload: Infinity
 });
 
-// 将 string 转换为 ArrayBuffer（Uint8Array）
-function binaryStringToArrayBuffer(binaryString) {
-  const len = binaryString.length;
-  const buffer = new ArrayBuffer(len);
-  const view = new Uint8Array(buffer);
-
-  for (let i = 0; i < len; i++) {
-    view[i] = binaryString.charCodeAt(i);
-  }
-
-  return buffer;
-}
-
 onMounted(() => {
   nextTick(() => {
     getPhotoData().then(res => {
@@ -131,7 +118,6 @@ onMounted(() => {
         showImage.value = true;
         map.forEachFeatureAtPixel(event.pixel, (feature) => {
           const imageUrl = feature.getId() as string;
-          console.log("imageUrl", imageUrl)
           if (imageUrl) {
             // 缩小地图并移到左上角
             const mapEl = mapContainer.value;
@@ -144,14 +130,10 @@ onMounted(() => {
               map.updateSize();
             }
             getPanoData(imageUrl).then(res => {
-              console.log("res", res)
-              console.log("restype", typeof res)
-              const arrayBuffer = binaryStringToArrayBuffer(res)
               // 将文件流转换为 Blob 对象
               // 将二进制数据转换为 URL
               const blob = new Blob([res], { type: 'image/jpeg' });
               const imageUrl = URL.createObjectURL(blob);
-              console.log("url", imageUrl)
               if (panoramaViewer) {
                 // 如果全景视图已经初始化，更新全景图像
                 panoramaViewer.setPanorama(imageUrl);

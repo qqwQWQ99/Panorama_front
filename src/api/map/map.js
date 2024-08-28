@@ -13,5 +13,6 @@ export function getPano(id) {
     return request({
         url: '/panorama/pano/getPano?id=' + id,
         method: 'get',
+        responseType: 'blob',
     })
 }
