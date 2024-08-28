@@ -7,3 +7,11 @@ export function getPhotoDataList() {
         method: 'get'
     })
 }
+
+//获取全景图片信息
+export function getPano(id) {
+    return request({
+        url: '/panorama/pano/getPano?id=' + id,
+        method: 'get',
+    })
+}

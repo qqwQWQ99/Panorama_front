@@ -27,7 +27,7 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import { singleClick } from 'ol/events/condition';
 import { Point } from "ol/geom";
-import { getPhotoDataList } from '@/api/map/map.js'
+import { getPhotoDataList, getPano } from '@/api/map/map.js'
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -39,6 +39,11 @@ let panoramaViewer = null;
 async function getPhotoData() {
   const photoData = await getPhotoDataList()
   return photoData
+}
+
+async function getPanoData(id) {
+  const panoData = await getPano(id)
+  return panoData
 }
 
 const tks = ['2b3024a8d9d2ad627fb1cdf6c9848e4b', '99deae501a50e17131f690f0f5b325eb', '394f33decf86eb6e084d5f4f85fe7d6c', 'f3aee4e9368106d2486b33b6cdf07822']
@@ -60,6 +65,19 @@ const TiandiMap_cva = new Tile({
   visible: true,
   preload: Infinity
 });
+
+// 将 string 转换为 ArrayBuffer（Uint8Array）
+function binaryStringToArrayBuffer(binaryString) {
+  const len = binaryString.length;
+  const buffer = new ArrayBuffer(len);
+  const view = new Uint8Array(buffer);
+
+  for (let i = 0; i < len; i++) {
+    view[i] = binaryString.charCodeAt(i);
+  }
+
+  return buffer;
+}
 
 onMounted(() => {
   nextTick(() => {
@@ -125,30 +143,39 @@ onMounted(() => {
               mapEl.style.left = '10px';
               map.updateSize();
             }
-            /*if (panoramaViewer) {
-              // 如果全景视图已经初始化，更新全景图像
-              panoramaViewer.setPanorama(imageUrl);
-            } else {
-              nextTick(() => {
-                // 否则初始化全景视图
-                panoramaViewer = new Viewer({
-                  container: viewerContainer.value,
-                  panorama: imageUrl,
-                  navbar: [
-                    'autorotate',
-                    'zoom',
-                    'move',
-                    'caption',
-                    'fullscreen',
-                  ],
-                });
-              })
-            }*/
+            getPanoData(imageUrl).then(res => {
+              console.log("res", res)
+              console.log("restype", typeof res)
+              const arrayBuffer = binaryStringToArrayBuffer(res)
+              // 将文件流转换为 Blob 对象
+              // 将二进制数据转换为 URL
+              const blob = new Blob([res], { type: 'image/jpeg' });
+              const imageUrl = URL.createObjectURL(blob);
+              console.log("url", imageUrl)
+              if (panoramaViewer) {
+                // 如果全景视图已经初始化，更新全景图像
+                panoramaViewer.setPanorama(imageUrl);
+              } else {
+                nextTick(() => {
+                  // 否则初始化全景视图
+                  panoramaViewer = new Viewer({
+                    container: viewerContainer.value,
+                    panorama: imageUrl,
+                    navbar: [
+                      'autorotate',
+                      'zoom',
+                      'move',
+                      'caption',
+                      'fullscreen',
+                    ],
+                  });
+                })
+              }
+            })
           }
         });
       });
     })
-    //console.log("photoDataList", photoDataList.value)
   })
 });
 
