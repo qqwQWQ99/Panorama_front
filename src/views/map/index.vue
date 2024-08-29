@@ -67,14 +67,30 @@ const TiandiMap_cva = new Tile({
   visible: true,
   preload: Infinity
 });
-
+const TiandiMap_img = new Tile({
+  source: new XYZ({  //天地图影像图层
+    url: 'http://t3.tianditu.com/DataServer?T=img_w&x={x}&y={y}&l={z}&tk=' + tk,
+    wrapX: false
+  }),
+  visible: true,
+  preload: Infinity
+});
+const TiandiMap_cia = new Tile({
+  source: new XYZ({  //天地图影像注记图层
+    url: 'http://t4.tianditu.com/DataServer?T=cia_w&x={x}&y={y}&l={z}&tk=' + tk,
+    wrapX: false
+  }),
+  visible: true,
+  zIndex: 100,
+  preload: Infinity
+});
 onMounted(() => {
   nextTick(() => {
     getPhotoData().then(res => {
       map = new Map({
         target: 'mapContainer', // 这里要确保ID与模板中的div一致
         layers: [
-          TiandiMap_cva, TiandiMap_vec
+          TiandiMap_cia, TiandiMap_img
         ],
         controls: defaults({
           attributionOptions: {
