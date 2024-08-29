@@ -12,6 +12,8 @@
 import { ref, onMounted, nextTick } from 'vue';
 import { Viewer } from "photo-sphere-viewer";
 import "photo-sphere-viewer/dist/photo-sphere-viewer.css";
+import { MarkersPlugin } from 'photo-sphere-viewer/dist/plugins/markers'
+import 'photo-sphere-viewer/dist/plugins/markers.css'
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -37,7 +39,7 @@ const mapContainer = ref<HTMLDivElement | null>(null);
 const showImage = ref(false);
 let map: Map;
 // 全景视图
-let panoramaViewer = null;
+let panoramaViewer: Viewer | null = null;
 
 async function getPhotoData() {
   const photoData = await getPhotoDataList()
@@ -232,6 +234,39 @@ onMounted(() => {
                   panoramaViewer = new Viewer({
                     container: viewerContainer.value,
                     panorama: imageUrl,
+                    plugins: [
+                      [
+                        MarkersPlugin,
+                        {
+                          markers: [
+                            {
+                              id: 'left',
+                              longitude: 0, // 正北的经度
+                              latitude: 0, // 左侧的纬度
+                              html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
+                              visible: true, // 标注初始显示与否
+                              width: 20,
+                              height: 20,
+                              anchor: 'center',
+                              tooltip: 'Go Left',
+                              data: { direction: 'left', imageUrl: '2021_05_00_22.29058715_120.87820709_19_276_CbSUk_bUoPPGvPBaBrjDTg.jpg' } // 替换为左边图片的 URL
+                            },
+                            {
+                              id: 'right',
+                              longitude: Math.PI, // 正南的经度
+                              latitude: 0, // 右侧的纬度
+                              html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
+                              visible: true, // 标注初始显示与否
+                              width: 20,
+                              height: 20,
+                              anchor: 'center',
+                              tooltip: 'Go Right',
+                              data: { direction: 'right', imageUrl: '2021_11_00_22.30041688_120.88872026_15_357_a42Zv2sBc-X_uREo2FYrqQ.jpg' } // 替换为右边图片的 URL
+                            }
+                          ]
+                        }
+                      ]
+                    ],
                     navbar: [
                       'autorotate',
                       'zoom',
@@ -239,6 +274,44 @@ onMounted(() => {
                       'caption',
                       'fullscreen',
                     ],
+
+                  });
+
+                  const markersPlugin = panoramaViewer.getPlugin(MarkersPlugin);
+
+                  /*markersPlugin.addMarker({
+                    id: 'left',
+                    longitude: -5, // 左侧的经度
+                    latitude: 0, // 左侧的纬度
+                    html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
+                    visible: true, // 标注初始显示与否
+                    width: 20,
+                    height: 20,
+                    anchor: 'center',
+                    tooltip: 'Go Left',
+                    data: { direction: 'left', imageUrl: '2021_05_00_22.29058715_120.87820709_19_276_CbSUk_bUoPPGvPBaBrjDTg.jpg' } // 替换为左边图片的 URL
+                  });
+
+                  markersPlugin.addMarker({
+                    id: 'right',
+                    longitude: 5, // 右侧的经度
+                    latitude: 0, // 右侧的纬度
+                    html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
+                    visible: true, // 标注初始显示与否
+                    width: 20,
+                    height: 20,
+                    anchor: 'center',
+                    tooltip: 'Go Right',
+                    data: { direction: 'right', imageUrl: '2021_05_00_22.29062710_120.87848180_19_281_8nOU63bTcGTCjfjPQTP-BA.jpg' } // 替换为右边图片的 URL
+                  });*/
+
+                  // 为热点添加点击事件
+                  markersPlugin.on('select-marker', (e, marker) => {
+                    const newImageUrl = marker.data.imageUrl;
+
+                    if (newImageUrl) {
+                      panoramaViewer?.setPanorama(newImageUrl);
+                    }
                   });
                 })
               }
