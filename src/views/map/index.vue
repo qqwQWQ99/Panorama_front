@@ -22,11 +22,12 @@ import { defaults } from "ol/control";
 import { fromLonLat, toLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Polygon from 'ol/geom/Polygon';
-import {Style, Fill, Stroke, Icon} from 'ol/style';
+import {Style, Fill, Stroke, Icon, Circle as CircleStyle, Text} from 'ol/style';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import { singleClick } from 'ol/events/condition';
 import { Point } from "ol/geom";
+import Cluster from 'ol/source/Cluster';
 import { getPhotoDataList, getPano } from '@/api/map/map.js'
 import mapPng from '@/assets/icons/map.png'
 import map1Png from '@/assets/icons/map1.png'
@@ -84,6 +85,7 @@ const TiandiMap_cia = new Tile({
   zIndex: 100,
   preload: Infinity
 });
+
 onMounted(() => {
   nextTick(() => {
     getPhotoData().then(res => {
@@ -121,21 +123,69 @@ onMounted(() => {
         return feature;
       });
 
-      const vectorSource = new VectorSource({
+      // 创建聚合源
+      const clusterSource = new Cluster({
+        distance: 10, // 聚合的距离，可以根据需要调整
+        source: new VectorSource({
+          features: features,
+        }),
+      });
+
+      // 定义聚合层的样式
+      const styleCache = {};
+      const clusterLayer = new VectorLayer({
+        source: clusterSource,
+        style: function (feature) {
+          const size = feature.get('features').length;
+          let style = styleCache[size];
+          if (!style) {
+            if (size > 1) {
+              // 聚合显示圆形
+              style = new Style({
+                image: new CircleStyle({
+                  radius: 10,
+                  fill: new Fill({
+                    color: '#3399CC',
+                  }),
+                  stroke: new Stroke({
+                    color: '#fff',
+                    width: 2,
+                  }),
+                }),
+                text: new Text({
+                  text: size.toString(),
+                  fill: new Fill({
+                    color: '#fff',
+                  }),
+                }),
+              });
+            } else {
+              // 非聚合单点显示原始图标
+              const originalFeature = feature.get('features')[0];
+              style = originalFeature.getStyle();
+            }
+            styleCache[size] = style;
+          }
+          return style;
+        },
+      });
+
+      /*const vectorSource = new VectorSource({
         features: features,
       });
 
       const vectorLayer = new VectorLayer({
         source: vectorSource,
-      });
+      });*/
 
-      map.addLayer(vectorLayer);
+      //map.addLayer(vectorLayer);
+      map.addLayer(clusterLayer);
 
       // 点击事件
       map.on('click', (event) => {
         showImage.value = true;
         // 首先重置所有 feature 的样式为 mapPng
-        vectorSource.getFeatures().forEach((feature) => {
+        clusterSource.getFeatures().forEach((feature) => {
           feature.setStyle(
               new Style({
                 image: new Icon({
@@ -156,7 +206,7 @@ onMounted(() => {
                 }),
               })
           );
-          const imageUrl = feature.getId() as string;
+          const imageUrl = feature.values_.features[0].id_ as string;
           if (imageUrl) {
             // 缩小地图并移到左上角
             const mapEl = mapContainer.value;
