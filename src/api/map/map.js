@@ -16,3 +16,11 @@ export function getPano(id) {
         responseType: 'blob',
     })
 }
+
+//获取全景图片其他信息
+export function getPanoDetail(id) {
+    return request({
+        url: '/panorama/pano/' + id,
+        method: 'get',
+    })
+}

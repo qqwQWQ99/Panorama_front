@@ -30,7 +30,7 @@ import VectorSource from 'ol/source/Vector';
 import { singleClick } from 'ol/events/condition';
 import { Point } from "ol/geom";
 import Cluster from 'ol/source/Cluster';
-import { getPhotoDataList, getPano } from '@/api/map/map.js'
+import { getPhotoDataList, getPano, getPanoDetail } from '@/api/map/map.js'
 import mapPng from '@/assets/icons/map.png'
 import map1Png from '@/assets/icons/map1.png'
 
@@ -88,238 +88,251 @@ const TiandiMap_cia = new Tile({
   preload: Infinity
 });
 
+async function initMap() {
+  const photoData = await getPhotoData();
+  map = new Map({
+    target: 'mapContainer', // 这里要确保ID与模板中的div一致
+    layers: [
+      TiandiMap_cia, TiandiMap_img
+    ],
+    controls: defaults({
+      attributionOptions: {
+        collapsible: false
+      }
+    }),
+    view: new View({
+      center: transform([120.9820, 23.74], "EPSG:4326", "EPSG:3857"),//将坐标从经度,纬度转换为不同的投影,默认为'EPSG：3857'。//视觉中心
+      zoom: 8.5,
+    }),
+  });
+
+  const features = photoData.map((point) => {
+    const coordinates = [Number(point.longitude), Number(point.latitude)]
+    const feature = new Feature({
+      geometry: new Point(fromLonLat(coordinates)),
+    });
+    feature.setStyle(
+        new Style({
+          image: new Icon({
+            anchor: [0.5, 1],
+            src: mapPng, // 使用一个简单的图标
+            scale: 0.05,
+          }),
+        })
+    );
+    feature.setId(point.id);
+    return feature;
+  });
+
+  // 创建聚合源
+  const clusterSource = new Cluster({
+    distance: 10, // 聚合的距离，可以根据需要调整
+    source: new VectorSource({
+      features: features,
+    }),
+  });
+
+  // 定义聚合层的样式
+  const styleCache = {};
+  const clusterLayer = new VectorLayer({
+    source: clusterSource,
+    style: function (feature) {
+      const size = feature.get('features').length;
+      let style = styleCache[size];
+      if (!style) {
+        if (size > 1) {
+          // 聚合显示圆形
+          style = new Style({
+            image: new CircleStyle({
+              radius: 10,
+              fill: new Fill({
+                color: '#3399CC',
+              }),
+              stroke: new Stroke({
+                color: '#fff',
+                width: 2,
+              }),
+            }),
+            text: new Text({
+              text: size.toString(),
+              fill: new Fill({
+                color: '#fff',
+              }),
+            }),
+          });
+        } else {
+          // 非聚合单点显示原始图标
+          const originalFeature = feature.get('features')[0];
+          style = originalFeature.getStyle();
+        }
+        styleCache[size] = style;
+      }
+      return style;
+    },
+  });
+
+  map.addLayer(clusterLayer);
+
+  // 点击事件
+  map.on('click', (event) => {
+    showImage.value = true;
+    // 首先重置所有 feature 的样式为 mapPng
+    clusterSource.getFeatures().forEach((feature) => {
+      feature.setStyle(
+          new Style({
+            image: new Icon({
+              anchor: [0.5, 1],
+              src: mapPng, // 重置为原始图标
+              scale: 0.05,
+            }),
+          })
+      );
+    });
+    map.forEachFeatureAtPixel(event.pixel, async (feature) => {
+      console.log("feature", feature)
+      feature.setStyle(
+          new Style({
+            image: new Icon({
+              anchor: [0.5, 1],
+              src: map1Png, // 使用一个简单的图标
+              scale: 0.05,
+            }),
+          })
+      );
+      const imageUrl = feature.values_.features[0].id_ as string;
+      if (imageUrl) {
+        // 缩小地图并移到左上角
+        const mapEl = mapContainer.value;
+        if (mapEl) {
+          mapEl.style.width = '300px';
+          mapEl.style.height = '200px';
+          mapEl.style.position = 'absolute';
+          mapEl.style.top = '10px';
+          mapEl.style.left = '10px';
+          map.updateSize();
+        }
+
+        const panoDetail = await getPanoDetail(imageUrl)
+        console.log("panoDetail", panoDetail.data)
+        const panoData = await getPanoData(imageUrl)
+        console.log("panoData", panoData)
+        // 将文件流转换为 Blob 对象
+        // 将二进制数据转换为 URL
+        const blob = new Blob([panoData], { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        await initPano(panoDetail, url);
+
+      }
+    });
+  });
+}
+
+async function initPano(panoDetail, url) {
+  console.log("调用了initPano")
+  if (panoramaViewer) {
+    // 清除现有的标记点
+    const markersPlugin = panoramaViewer.getPlugin(MarkersPlugin);
+    markersPlugin.clearMarkers();
+
+    // 更新全景图像
+    panoramaViewer.setPanorama(url).then(() => {
+      // 全景图像加载完成后，逐个添加新标记点
+      const newMarkers = createMarkers(panoDetail.data);
+      newMarkers.forEach(marker => {
+        markersPlugin.addMarker(marker);
+      });
+    });
+
+  } else {
+    panoramaViewer = new Viewer({
+      container: viewerContainer.value,
+      panorama: url,
+      plugins: [
+        [
+          MarkersPlugin,
+          {
+            markers: createMarkers(panoDetail.data)
+          }
+        ]
+      ],
+      navbar: [
+        'autorotate',
+        'zoom',
+        'move',
+        'caption',
+        'fullscreen',
+      ],
+    });
+
+    const markersPlugin = panoramaViewer.getPlugin(MarkersPlugin);
+
+    // 为热点添加点击事件
+    markersPlugin.on('select-marker', async (e, marker) => {
+      console.log("marker.data.imageUrl1111111111111111", marker.data.imageUrl);
+      const markerPanoData = await getPanoData(marker.data.imageUrl)
+      // 将文件流转换为 Blob 对象
+      // 将二进制数据转换为 URL
+      const blob = new Blob([markerPanoData], {type: 'image/jpeg'});
+      const newImageUrl = URL.createObjectURL(blob);
+      if (newImageUrl) {
+        // 更新全景图像
+        panoramaViewer.setPanorama(newImageUrl).then(async () => {
+          // 获取新的全景图详细信息
+          const newPanoDetail = await getPanoDetail(marker.data.imageUrl);
+
+          // 清除旧的标记点
+          markersPlugin.clearMarkers();
+
+          const newMarkers = createMarkers(newPanoDetail.data);
+          newMarkers.forEach(marker => {
+            markersPlugin.addMarker(marker);
+          });
+        })
+      }
+    });
+  }
+}
+
+function createMarkers(data) {
+  const markers = [];
+  console.log("data.nextId11111111111111111", data.nextId1)
+  console.log("data.nextId22222222222222222", data.nextId2)
+  if (data.nextId1 !== null) {
+    markers.push({
+      id: 'nextId1',
+      longitude: data.northRotation1,
+      latitude: 0,
+      html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%; z-index: 1000000000; position: absolute;"></div>`,
+      visible: true,
+      width: 20,
+      height: 20,
+      anchor: 'center',
+      zIndex: 9999999999,
+      data: { direction: 'nextId1', imageUrl: data.nextId1 }
+    });
+  }
+
+  if (data.nextId2 !== null) {
+    markers.push({
+      id: 'nextId2',
+      longitude: data.northRotation2,
+      latitude: 0,
+      html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%; z-index: 1000000000!important; position: absolute;"></div>`,
+      visible: true,
+      width: 20,
+      height: 20,
+      anchor: 'center',
+      zIndex: 9999999999,
+      data: { direction: 'nextId2', imageUrl: data.nextId2 }
+    });
+  }
+
+  return markers;
+}
+
 onMounted(() => {
   nextTick(() => {
-    getPhotoData().then(res => {
-      map = new Map({
-        target: 'mapContainer', // 这里要确保ID与模板中的div一致
-        layers: [
-          TiandiMap_cia, TiandiMap_img
-        ],
-        controls: defaults({
-          attributionOptions: {
-            collapsible: false
-          }
-        }),
-        view: new View({
-          center: transform([120.9820, 23.74], "EPSG:4326", "EPSG:3857"),//将坐标从经度,纬度转换为不同的投影,默认为'EPSG：3857'。//视觉中心
-          zoom: 8.5,
-        }),
-      });
-
-      const features = res.map((point) => {
-        const coordinates = [Number(point.longitude), Number(point.latitude)]
-        const feature = new Feature({
-          geometry: new Point(fromLonLat(coordinates)),
-        });
-        feature.setStyle(
-            new Style({
-              image: new Icon({
-                anchor: [0.5, 1],
-                src: mapPng, // 使用一个简单的图标
-                scale: 0.05,
-              }),
-            })
-        );
-        feature.setId(point.id);
-        return feature;
-      });
-
-      // 创建聚合源
-      const clusterSource = new Cluster({
-        distance: 10, // 聚合的距离，可以根据需要调整
-        source: new VectorSource({
-          features: features,
-        }),
-      });
-
-      // 定义聚合层的样式
-      const styleCache = {};
-      const clusterLayer = new VectorLayer({
-        source: clusterSource,
-        style: function (feature) {
-          const size = feature.get('features').length;
-          let style = styleCache[size];
-          if (!style) {
-            if (size > 1) {
-              // 聚合显示圆形
-              style = new Style({
-                image: new CircleStyle({
-                  radius: 10,
-                  fill: new Fill({
-                    color: '#3399CC',
-                  }),
-                  stroke: new Stroke({
-                    color: '#fff',
-                    width: 2,
-                  }),
-                }),
-                text: new Text({
-                  text: size.toString(),
-                  fill: new Fill({
-                    color: '#fff',
-                  }),
-                }),
-              });
-            } else {
-              // 非聚合单点显示原始图标
-              const originalFeature = feature.get('features')[0];
-              style = originalFeature.getStyle();
-            }
-            styleCache[size] = style;
-          }
-          return style;
-        },
-      });
-
-      /*const vectorSource = new VectorSource({
-        features: features,
-      });
-
-      const vectorLayer = new VectorLayer({
-        source: vectorSource,
-      });*/
-
-      //map.addLayer(vectorLayer);
-      map.addLayer(clusterLayer);
-
-      // 点击事件
-      map.on('click', (event) => {
-        showImage.value = true;
-        // 首先重置所有 feature 的样式为 mapPng
-        clusterSource.getFeatures().forEach((feature) => {
-          feature.setStyle(
-              new Style({
-                image: new Icon({
-                  anchor: [0.5, 1],
-                  src: mapPng, // 重置为原始图标
-                  scale: 0.05,
-                }),
-              })
-          );
-        });
-        map.forEachFeatureAtPixel(event.pixel, (feature) => {
-          feature.setStyle(
-              new Style({
-                image: new Icon({
-                  anchor: [0.5, 1],
-                  src: map1Png, // 使用一个简单的图标
-                  scale: 0.05,
-                }),
-              })
-          );
-          const imageUrl = feature.values_.features[0].id_ as string;
-          if (imageUrl) {
-            // 缩小地图并移到左上角
-            const mapEl = mapContainer.value;
-            if (mapEl) {
-              mapEl.style.width = '300px';
-              mapEl.style.height = '200px';
-              mapEl.style.position = 'absolute';
-              mapEl.style.top = '10px';
-              mapEl.style.left = '10px';
-              map.updateSize();
-            }
-            getPanoData(imageUrl).then(res => {
-              // 将文件流转换为 Blob 对象
-              // 将二进制数据转换为 URL
-              const blob = new Blob([res], { type: 'image/jpeg' });
-              const imageUrl = URL.createObjectURL(blob);
-              if (panoramaViewer) {
-                // 如果全景视图已经初始化，更新全景图像
-                panoramaViewer.setPanorama(imageUrl);
-              } else {
-                nextTick(() => {
-                  // 否则初始化全景视图
-                  panoramaViewer = new Viewer({
-                    container: viewerContainer.value,
-                    panorama: imageUrl,
-                    plugins: [
-                      [
-                        MarkersPlugin,
-                        {
-                          markers: [
-                            {
-                              id: 'left',
-                              longitude: 0, // 正北的经度
-                              latitude: 0, // 左侧的纬度
-                              html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
-                              visible: true, // 标注初始显示与否
-                              width: 20,
-                              height: 20,
-                              anchor: 'center',
-                              tooltip: 'Go Left',
-                              data: { direction: 'left', imageUrl: '2021_05_00_22.29058715_120.87820709_19_276_CbSUk_bUoPPGvPBaBrjDTg.jpg' } // 替换为左边图片的 URL
-                            },
-                            {
-                              id: 'right',
-                              longitude: Math.PI, // 正南的经度
-                              latitude: 0, // 右侧的纬度
-                              html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
-                              visible: true, // 标注初始显示与否
-                              width: 20,
-                              height: 20,
-                              anchor: 'center',
-                              tooltip: 'Go Right',
-                              data: { direction: 'right', imageUrl: '2021_11_00_22.30041688_120.88872026_15_357_a42Zv2sBc-X_uREo2FYrqQ.jpg' } // 替换为右边图片的 URL
-                            }
-                          ]
-                        }
-                      ]
-                    ],
-                    navbar: [
-                      'autorotate',
-                      'zoom',
-                      'move',
-                      'caption',
-                      'fullscreen',
-                    ],
-
-                  });
-
-                  const markersPlugin = panoramaViewer.getPlugin(MarkersPlugin);
-
-                  /*markersPlugin.addMarker({
-                    id: 'left',
-                    longitude: -5, // 左侧的经度
-                    latitude: 0, // 左侧的纬度
-                    html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
-                    visible: true, // 标注初始显示与否
-                    width: 20,
-                    height: 20,
-                    anchor: 'center',
-                    tooltip: 'Go Left',
-                    data: { direction: 'left', imageUrl: '2021_05_00_22.29058715_120.87820709_19_276_CbSUk_bUoPPGvPBaBrjDTg.jpg' } // 替换为左边图片的 URL
-                  });
-
-                  markersPlugin.addMarker({
-                    id: 'right',
-                    longitude: 5, // 右侧的经度
-                    latitude: 0, // 右侧的纬度
-                    html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>`, // 红色圆点
-                    visible: true, // 标注初始显示与否
-                    width: 20,
-                    height: 20,
-                    anchor: 'center',
-                    tooltip: 'Go Right',
-                    data: { direction: 'right', imageUrl: '2021_05_00_22.29062710_120.87848180_19_281_8nOU63bTcGTCjfjPQTP-BA.jpg' } // 替换为右边图片的 URL
-                  });*/
-
-                  // 为热点添加点击事件
-                  markersPlugin.on('select-marker', (e, marker) => {
-                    const newImageUrl = marker.data.imageUrl;
-
-                    if (newImageUrl) {
-                      panoramaViewer?.setPanorama(newImageUrl);
-                    }
-                  });
-                })
-              }
-            })
-          }
-        });
-      });
-    })
+    initMap();
   })
 });
 
