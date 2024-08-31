@@ -297,33 +297,35 @@ function createMarkers(data) {
   const markers = [];
   console.log("data.nextId11111111111111111", data.nextId1)
   console.log("data.nextId22222222222222222", data.nextId2)
-  if (data.nextId1 !== null) {
+  if (data.nextId2 !== null) {
     markers.push({
       id: 'nextId1',
-      longitude: data.northRotation1,
-      latitude: 0,
+      longitude: data.northRotation2 - data.northRotation +"deg",
+      latitude: '0deg',
       html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%; z-index: 1000000000; position: absolute;"></div>`,
       visible: true,
       width: 20,
       height: 20,
       anchor: 'center',
       zIndex: 9999999999,
-      data: { direction: 'nextId1', imageUrl: data.nextId1 }
+      tooltip: 'nextId1',
+      data: { direction: 'nextId1', imageUrl: data.nextId2 }
     });
   }
 
-  if (data.nextId2 !== null) {
+  if (data.nextId1 !== null) {
     markers.push({
       id: 'nextId2',
-      longitude: data.northRotation2,
-      latitude: 0,
+      longitude: data.northRotation1 - data.northRotation +"deg",
+      latitude: '0deg',
       html: `<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%; z-index: 1000000000!important; position: absolute;"></div>`,
       visible: true,
       width: 20,
       height: 20,
       anchor: 'center',
       zIndex: 9999999999,
-      data: { direction: 'nextId2', imageUrl: data.nextId2 }
+      tooltip: 'nextId2',
+      data: { direction: 'nextId2', imageUrl: data.nextId1 }
     });
   }
 
@@ -393,6 +395,7 @@ const returnToMap = () => {
   cursor: pointer;
   font-size: 16px;
   border-radius: 4px;
+  z-index: 99999999999999999;
 }
 
 .return-button:hover {
