@@ -40,6 +40,7 @@ const showImage = ref(false);
 let map: Map;
 // 全景视图
 let panoramaViewer: Viewer | null = null;
+let clusterSource;
 
 async function getPhotoData() {
   const photoData = await getPhotoDataList()
@@ -125,7 +126,7 @@ async function initMap() {
   });
 
   // 创建聚合源
-  const clusterSource = new Cluster({
+  clusterSource = new Cluster({
     distance: 10, // 聚合的距离，可以根据需要调整
     source: new VectorSource({
       features: features,
@@ -270,6 +271,9 @@ async function initPano(panoDetail, url) {
     markersPlugin.on('select-marker', async (e, marker) => {
       console.log("marker.data.imageUrl1111111111111111", marker.data.imageUrl);
       const markerPanoData = await getPanoData(marker.data.imageUrl)
+
+      updateMapIconStyle(marker.data.imageUrl)
+
       // 将文件流转换为 Blob 对象
       // 将二进制数据转换为 URL
       const blob = new Blob([markerPanoData], {type: 'image/jpeg'});
@@ -330,6 +334,34 @@ function createMarkers(data) {
   }
 
   return markers;
+}
+
+function updateMapIconStyle(imageUrl) {
+  clusterSource.getFeatures().forEach((feature) => {
+    feature.setStyle(
+        new Style({
+          image: new Icon({
+            anchor: [0.5, 1],
+            src: mapPng, // 重置为原始图标
+            scale: 0.05,
+          }),
+        })
+    );
+    for(let i = 0; i < feature.values_.features.length; i++) {
+      if(feature.values_.features[i].id_ === imageUrl){
+        feature.setStyle(
+            new Style({
+              image: new Icon({
+                anchor: [0.5, 1],
+                src: map1Png, // 使用一个简单的图标
+                scale: 0.05,
+              }),
+            })
+        );
+        //map.getView().setCenter(feature.values_.geometry.flatCoordinates)
+      }
+    }
+  });
 }
 
 onMounted(() => {
