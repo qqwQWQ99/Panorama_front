@@ -141,7 +141,7 @@ async function initMap() {
       const size = feature.get('features').length;
       let style = styleCache[size];
       if (!style) {
-        if (size > 1) {
+        if (size > 2) {
           // 聚合显示圆形
           style = new Style({
             image: new CircleStyle({
