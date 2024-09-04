@@ -18,7 +18,7 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
 import Tile from 'ol/layer/Tile'    // 瓦片渲染方法
-import { XYZ } from "ol/source";
+import {WMTS, XYZ} from "ol/source";
 import { transform } from "ol/proj";                 // 地图样式
 import { defaults } from "ol/control";
 import { fromLonLat, toLonLat } from 'ol/proj';
@@ -33,6 +33,9 @@ import Cluster from 'ol/source/Cluster';
 import { getPhotoDataList, getPano, getPanoDetail } from '@/api/map/map.js'
 import mapPng from '@/assets/icons/map.png'
 import map1Png from '@/assets/icons/map1.png'
+import { get as getProjection } from 'ol/proj';
+import { getWidth } from 'ol/extent';
+import WMTSTileGrid from "ol/tilegrid/WMTS";
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -76,7 +79,8 @@ const TiandiMap_img = new Tile({
     url: 'http://t3.tianditu.com/DataServer?T=img_w&x={x}&y={y}&l={z}&tk=' + tk,
     wrapX: false
   }),
-  visible: true,
+  // visible: true,
+    visible: false,
   preload: Infinity
 });
 const TiandiMap_cia = new Tile({
@@ -84,17 +88,49 @@ const TiandiMap_cia = new Tile({
     url: 'http://t4.tianditu.com/DataServer?T=cia_w&x={x}&y={y}&l={z}&tk=' + tk,
     wrapX: false
   }),
-  visible: true,
+  visible: false,
   zIndex: 100,
   preload: Infinity
 });
+
+// 添加 ArcGIS WMTS 图层的代码
+const projection = getProjection('EPSG:3857');
+const projectionExtent = projection.getExtent();
+const size = getWidth(projectionExtent) / 256;
+const resolutions = [];
+const matrixIds = [];
+for (let z = 7; z < 19; ++z) {
+    // 设定分辨率
+    resolutions[z] = size / Math.pow(2, z);
+    matrixIds[z] = z;
+}
+
+const arcgisWmtsLayer
+    = new TileLayer({
+    source: new WMTS({
+        url: 'http://192.168.193.189:6080/arcgis/rest/services/TaiWan2/MapServer/WMTS/',
+        layer: 'TaiWan2', // 需要根据你的服务定义的图层名称进行调整
+        matrixSet: 'GoogleMapsCompatible', // 根据实际的WMTS服务进行调整
+        format: 'image/png',
+        projection: projection,
+        tileGrid: new WMTSTileGrid({
+            origin: [-20037508.3428, 20037508.3428], // 左上角的坐标
+            resolutions: resolutions,
+            matrixIds: matrixIds
+        }),
+        style: 'default',
+        wrapX: true
+    })
+});
+
+
 
 async function initMap() {
   const photoData = await getPhotoData();
   map = new Map({
     target: 'mapContainer', // 这里要确保ID与模板中的div一致
     layers: [
-      TiandiMap_cia, TiandiMap_img
+      TiandiMap_cia, TiandiMap_img,arcgisWmtsLayer
     ],
     controls: defaults({
       attributionOptions: {
@@ -104,6 +140,7 @@ async function initMap() {
     view: new View({
       center: transform([120.9820, 23.74], "EPSG:4326", "EPSG:3857"),//将坐标从经度,纬度转换为不同的投影,默认为'EPSG：3857'。//视觉中心
       zoom: 8.5,
+      maxZoom: 18,
     }),
   });
 
